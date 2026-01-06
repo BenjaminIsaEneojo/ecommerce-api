@@ -1,0 +1,6 @@
+@GlobalkStoreApi_HostAddress = http://localhost:5108
+
+GET {{GlobalkStoreApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
