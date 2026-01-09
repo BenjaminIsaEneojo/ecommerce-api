@@ -38,7 +38,7 @@ namespace GlobalkStoreApi.Controllers
         }
 
         [HttpPost]
-        public IActionResult CreateProduct([FromForm]ProductDto productDto)
+        public IActionResult CreateProduct([FromForm] ProductDto productDto)
         {
             if (productDto.ImageFile == null)
             {
@@ -57,7 +57,6 @@ namespace GlobalkStoreApi.Controllers
                 productDto.ImageFile.CopyTo(stream);
             }
 
-
             // save product in the database
             Product product = new Product()
             {
@@ -71,6 +70,47 @@ namespace GlobalkStoreApi.Controllers
             };
 
             context.Products.Add(product);
+            context.SaveChanges();
+
+            return Ok(product);
+        }
+
+        [HttpPut("{id}")]
+        public IActionResult UpdateProduct(int id, [FromForm] ProductDto productDto)
+        {
+            var product = context.Products.Find(id);
+
+            if (product == null)
+            {
+                return NotFound();
+            }
+
+            string imageFileName = product.ImageFileName;
+            if (productDto.ImageFile != null)
+            {
+                // save the image on the server
+                imageFileName = DateTime.Now.ToString("yyyyMMddHHssfff");
+                imageFileName += Path.GetExtension(productDto.ImageFile.FileName);
+
+                string imagesFolder = env.WebRootPath + "/images/products/";
+                using (var stream = System.IO.File.Create(imagesFolder + imageFileName))
+                {
+                    productDto.ImageFile.CopyTo(stream);
+                }
+
+
+                // delete the old image
+                System.IO.File.Delete(imagesFolder + product.ImageFileName);
+            }
+
+            // update the produuct in the database
+            product.Name = productDto.Name;
+            product.Brand = productDto.Brand;
+            product.Category = productDto.Category;
+            product.Price = productDto.Price;
+            product.Description = productDto.Description ?? "";
+            product.ImageFileName = imageFileName;
+
             context.SaveChanges();
 
             return Ok(product);
