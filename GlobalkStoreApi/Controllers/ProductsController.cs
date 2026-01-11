@@ -12,17 +12,144 @@ namespace GlobalkStoreApi.Controllers
         private readonly ApplicationDbContext context;
         private readonly IWebHostEnvironment env;
 
+        private readonly List<string> listCategories = new List<string>()
+        {
+            "Phones", "Computers", "Accessories", "Cameras", "Others"
+        };
+
         public ProductsController(ApplicationDbContext context, IWebHostEnvironment env)
         {
             this.context = context;
             this.env = env;
         }
 
-        [HttpGet]
-        public IActionResult GetProducts(int id)
+        [HttpGet("categories")]
+        public IActionResult GetCategories()
         {
-            var products = context.Products.ToList();
-            return Ok(products);
+            return Ok(listCategories);
+        }
+
+        [HttpGet]
+        public IActionResult GetProducts(string? search, string? category,
+            int? minPrice, int? maxPrice,
+            string? sort, string? order,
+            int? page)
+        {
+            IQueryable<Product> query = context.Products;
+
+            // search functionality
+            if (search != null)
+            {
+                query = query.Where(p => p.Name.Contains(search) || p.Description.Contains(search));
+            }
+
+            if (category != null)
+            {
+                query = query.Where(p => p.Category == category);
+            }
+
+            if (minPrice != null)
+            {
+                query = query.Where(p => p.Price >= minPrice);
+            }
+
+            if (maxPrice != null)
+            {
+                query = query.Where(p => p.Price <= maxPrice);
+            }
+
+            // sort functionality
+            if (sort == null) sort = "id";
+            if (order == null || order != "asc") order = "desc";
+
+            if (sort.ToLower() == "name")
+            {
+                if (order == "asc")
+                {
+                    query = query.OrderBy(p => p.Name);
+                }
+                else
+                {
+                    query = query.OrderByDescending(p => p.Name);
+                }
+            }
+            else if (sort.ToLower() == "brand")
+            {
+                if (order == "asc")
+                {
+                    query = query.OrderBy(p => p.Brand);
+                }
+                else
+                {
+                    query = query.OrderByDescending(p => p.Brand);
+                }
+            }
+            else if (sort.ToLower() == "category")
+            {
+                if (order == "asc")
+                {
+                    query = query.OrderBy(p => p.Category);
+                }
+                else
+                {
+                    query = query.OrderByDescending(p => p.Category);
+                }
+            }
+            else if (sort.ToLower() == "price")
+            {
+                if (order == "asc")
+                {
+                    query = query.OrderBy(p => p.Price);
+                }
+                else
+                {
+                    query = query.OrderByDescending(p => p.Price);
+                }
+            }
+            else if (sort.ToLower() == "date")
+            {
+                if (order == "asc")
+                {
+                    query = query.OrderBy(p => p.CreatedAt);
+                }
+                else
+                {
+                    query = query.OrderByDescending(p => p.CreatedAt);
+                }
+            }
+            else
+            {
+                if (order == "asc")
+                {
+                    query = query.OrderBy(p => p.Id);
+                }
+                else
+                {
+                    query = query.OrderByDescending(p => p.Id);
+                }
+            }
+
+            // pagination functionality
+            if (page == null || page < 1) page = 1;
+
+            int pageSize = 5;
+                int totalPages = 0;
+            decimal count = query.Count();
+            totalPages = (int)Math.Ceiling(count / pageSize);
+
+            query = query.Skip((int) (page - 1) * pageSize).Take(pageSize);
+
+            var products = query.ToList();
+
+            var response = new
+            {
+                Products = products,
+                TotalPages = totalPages,
+                PageSize = pageSize,
+                Page = page
+            };
+
+            return Ok(response);
         }
 
         [HttpGet("{id}")]
@@ -40,6 +167,12 @@ namespace GlobalkStoreApi.Controllers
         [HttpPost]
         public IActionResult CreateProduct([FromForm] ProductDto productDto)
         {
+            if (!listCategories.Contains(productDto.Category))
+            {
+                ModelState.AddModelError("Category", "Please select a valid category");
+                return BadRequest(ModelState);
+            }
+
             if (productDto.ImageFile == null)
             {
                 ModelState.AddModelError("ImageFile", "The Image File is required");
@@ -78,6 +211,12 @@ namespace GlobalkStoreApi.Controllers
         [HttpPut("{id}")]
         public IActionResult UpdateProduct(int id, [FromForm] ProductDto productDto)
         {
+            if (!listCategories.Contains(productDto.Category))
+            {
+                ModelState.AddModelError("Category", "Please select a valid category");
+                return BadRequest(ModelState);
+            }
+
             var product = context.Products.Find(id);
 
             if (product == null)
@@ -114,6 +253,27 @@ namespace GlobalkStoreApi.Controllers
             context.SaveChanges();
 
             return Ok(product);
+        }
+
+        [HttpDelete("{id}")]
+        public IActionResult DeleteProduct(int id)
+        {
+            var product = context.Products.Find(id);
+
+            if (product == null)
+            {
+                return NotFound();
+            }
+
+            // delete the image on the server
+            string imagesFolder = env.WebRootPath + "/images/products/";
+            System.IO.File.Delete(imagesFolder + product.ImageFileName);
+
+            // delete the product from the database
+            context.Products.Remove(product);
+            context.SaveChanges();
+
+            return Ok();
         }
     }
 }
